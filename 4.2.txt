@@ -1,0 +1,156 @@
+import tkinter as tk
+from tkinter import ttk, messagebox
+import matplotlib.pyplot as plt
+import pandas as pd
+
+
+# Структура данных
+class Teacher:
+    def __init__(self, surname, id_number, subjects, hourly_rate):
+        self.surname = surname
+        self.id_number = id_number
+        self.subjects = subjects  # Список предметов
+        self.hourly_rate = hourly_rate  # Ставка за час
+        self.schedule = {}  # График работы, ключ - месяц, значение - часы
+
+    def add_hours(self, month, hours):
+        """Добавить часы преподавания в график."""
+        self.schedule[month] = hours
+
+    def calculate_payment(self, start_month, end_month):
+        """Вычислить оплату за период."""
+        total_hours = sum([self.schedule.get(month, 0) for month in range(start_month, end_month + 1)])
+        return total_hours * self.hourly_rate
+
+    def get_subject_count(self):
+        """Получить количество предметов, которые ведет преподаватель."""
+        return len(self.subjects)
+
+    def __repr__(self):
+        return f"{self.surname} (ID: {self.id_number})"
+
+
+# Основной класс для управления данными
+class Manager:
+    def __init__(self):
+        self.teachers = []
+
+    def add_teacher(self, surname, id_number, subjects, hourly_rate):
+        """Добавить преподавателя в базу данных."""
+        new_teacher = Teacher(surname, id_number, subjects, hourly_rate)
+        self.teachers.append(new_teacher)
+
+    def find_teacher(self, search_term):
+        """Поиск преподавателя по фамилии или ID."""
+        return [teacher for teacher in self.teachers if
+                search_term.lower() in teacher.surname.lower() or search_term == teacher.id_number]
+
+    def generate_report(self):
+        """Сгенерировать отчет по всем преподавателям."""
+        report_data = []
+        for teacher in self.teachers:
+            for month in range(1, 13):
+                payment = teacher.calculate_payment(month, month)
+                for subject in teacher.subjects:
+                    report_data.append([teacher.surname, teacher.id_number, subject, month, payment])
+        return pd.DataFrame(report_data, columns=["Преподаватель", "ID", "Предмет", "Месяц", "Стоимость"])
+
+    def calculate_total_payment(self, teacher_id, start_month, end_month):
+        """Вычислить общую сумму по преподавателю за указанный период."""
+        teacher = next((t for t in self.teachers if t.id_number == teacher_id), None)
+        if teacher:
+            return teacher.calculate_payment(start_month, end_month)
+        return 0
+
+
+# Интерфейс с использованием tkinter
+class Application(tk.Tk):
+    def __init__(self, manager):
+        super().__init__()
+        self.manager = manager
+        self.title("Управление преподавателями")
+        self.geometry("800x600")
+
+        self.create_widgets()
+
+    def create_widgets(self):
+        # Панель для ввода данных преподавателей
+        self.add_teacher_frame = tk.LabelFrame(self, text="Добавить преподавателя", padx=10, pady=10)
+        self.add_teacher_frame.pack(padx=10, pady=10, fill="x")
+
+        # Фамилия, ID, предметы, ставка
+        tk.Label(self.add_teacher_frame, text="Фамилия:").grid(row=0, column=0)
+        self.surname_entry = tk.Entry(self.add_teacher_frame)
+        self.surname_entry.grid(row=0, column=1)
+
+        tk.Label(self.add_teacher_frame, text="ID:").grid(row=1, column=0)
+        self.id_entry = tk.Entry(self.add_teacher_frame)
+        self.id_entry.grid(row=1, column=1)
+
+        tk.Label(self.add_teacher_frame, text="Предметы (через запятую):").grid(row=2, column=0)
+        self.subjects_entry = tk.Entry(self.add_teacher_frame)
+        self.subjects_entry.grid(row=2, column=1)
+
+        tk.Label(self.add_teacher_frame, text="Ставка за час:").grid(row=3, column=0)
+        self.hourly_rate_entry = tk.Entry(self.add_teacher_frame)
+        self.hourly_rate_entry.grid(row=3, column=1)
+
+        self.add_teacher_button = tk.Button(self.add_teacher_frame, text="Добавить преподавателя",
+                                            command=self.add_teacher)
+        self.add_teacher_button.grid(row=4, columnspan=2)
+
+        # Панель для поиска преподавателей
+        self.search_frame = tk.LabelFrame(self, text="Поиск преподавателя", padx=10, pady=10)
+        self.search_frame.pack(padx=10, pady=10, fill="x")
+
+        tk.Label(self.search_frame, text="Фамилия или ID:").grid(row=0, column=0)
+        self.search_entry = tk.Entry(self.search_frame)
+        self.search_entry.grid(row=0, column=1)
+
+        self.search_button = tk.Button(self.search_frame, text="Поиск", command=self.search_teacher)
+        self.search_button.grid(row=1, columnspan=2)
+
+        # Панель для вывода результатов
+        self.result_text = tk.Text(self, height=10, width=80)
+        self.result_text.pack(padx=10, pady=10)
+
+    def add_teacher(self):
+        """Обработчик для добавления преподавателя."""
+        surname = self.surname_entry.get()
+        id_number = self.id_entry.get()
+        subjects = self.subjects_entry.get().split(",")
+        try:
+            hourly_rate = float(self.hourly_rate_entry.get())
+            self.manager.add_teacher(surname, id_number, subjects, hourly_rate)
+            self.result_text.insert(tk.END, f"Преподаватель {surname} добавлен.\n")
+        except ValueError:
+            messagebox.showerror("Ошибка", "Пожалуйста, введите корректные данные.")
+
+        self.clear_entries()
+
+    def search_teacher(self):
+        """Обработчик для поиска преподавателя."""
+        search_term = self.search_entry.get()
+        results = self.manager.find_teacher(search_term)
+        self.result_text.delete(1.0, tk.END)
+        if results:
+            for teacher in results:
+                self.result_text.insert(tk.END, f"{teacher}\n")
+        else:
+            self.result_text.insert(tk.END, "Преподаватель не найден.\n")
+
+        self.search_entry.delete(0, tk.END)
+
+    def clear_entries(self):
+        """Очистка полей ввода."""
+        self.surname_entry.delete(0, tk.END)
+        self.id_entry.delete(0, tk.END)
+        self.subjects_entry.delete(0, tk.END)
+        self.hourly_rate_entry.delete(0, tk.END)
+
+
+# Запуск программы
+if __name__ == "__main__":
+    manager = Manager()
+    app = Application(manager)
+    app.mainloop()
